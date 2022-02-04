@@ -70,6 +70,8 @@ class _MyHomePageState extends State<MyHomePage> {
     final eth = window.ethereum;
     var client = Web3Client.custom(eth!.asRpcService());
     var credentials = await eth.requestAccount();
+    _creator =
+        LongShortPairCreator(address: credentials.address, client: client);
     checkChain();
     setState(() {
       defaultClient = client;
@@ -112,24 +114,29 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void mint() async {}
 
-  void createAnAPT() async {
+  Future<bool> createAnAPT() async {
     List<int> theList = utf8.encode("0");
     List<int> priceId = utf8.encode("AAVEUSD");
     priceIdentifier = Uint8List.fromList(priceId);
     customAncillaryData = Uint8List.fromList(theList);
     prepaidProposerReward = BigInt.from(12);
-
-    _creator.createLongShortPair(
-        expirationTimestamp,
-        collateralPerPair,
-        priceIdentifier,
-        syntheticName,
-        syntheticSymbol,
-        collateralToken,
-        financialProductLibrary,
-        customAncillaryData,
-        prepaidProposerReward,
-        credentials: defaultCredentials);
+    try {
+      _creator.createLongShortPair(
+          expirationTimestamp,
+          collateralPerPair,
+          priceIdentifier,
+          syntheticName,
+          syntheticSymbol,
+          collateralToken,
+          financialProductLibrary,
+          customAncillaryData,
+          prepaidProposerReward,
+          credentials: defaultCredentials);
+      return true;
+    } catch (error) {
+      print("[Console] Couldn't create LongShortPair: $error");
+      return false;
+    }
   }
 
   @override
@@ -167,6 +174,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter some text';
                       }
+                      syntheticName = value;
                       return null;
                     },
                   ),
@@ -178,7 +186,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     lastDate: DateTime(2100),
                     icon: Icon(Icons.event),
                     dateLabelText: 'Date',
-                    timeLabelText: "Hour",
+                    timeLabelText: "Time",
                     selectableDayPredicate: (date) {
                       // Disable weekend days to select from the calendar
                       if (date.weekday == 6 || date.weekday == 7) {
@@ -192,7 +200,11 @@ class _MyHomePageState extends State<MyHomePage> {
                       print(val);
                       return null;
                     },
-                    onSaved: (val) => print(val),
+                    onSaved: (val) {
+                      var parsedValue = DateTime.parse(val!);
+                      expirationTimestamp =
+                          BigInt.from(parsedValue.millisecondsSinceEpoch);
+                    },
                   ),
                   TextFormField(
                     decoration: const InputDecoration(
@@ -202,6 +214,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter some text';
                       }
+                      syntheticSymbol = value;
                       return null;
                     },
                   ),
@@ -213,10 +226,20 @@ class _MyHomePageState extends State<MyHomePage> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter some text';
                       }
+                      collateralPerPair = BigInt.parse(value);
                       return null;
                     },
                   ),
-                  ElevatedButton(onPressed: onPressed, child: child)
+                  ElevatedButton(
+                      onPressed: () async {
+                        bool response = await createAnAPT();
+                        if (response) {
+                          // Build success popup
+                        } else {
+                          // Build fail popup
+                        }
+                      },
+                      child: const Icon(Icons.account_balance_wallet))
                 ],
               ),
             ),
