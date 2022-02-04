@@ -62,64 +62,61 @@ class _MyHomePageState extends State<MyHomePage> {
   late Credentials defaultCredentials;
   late BigInt expirationTimestamp, collateralPerPair, prepaidProposerReward;
   late String syntheticName, syntheticSymbol;
-  late EthereumAddress collateralToken, financialProductLibrary;
+  late EthereumAddress collateralToken, financialProductLibrary, lspAddress;
   late Uint8List priceIdentifier, customAncillaryData;
   late LongShortPairCreator _creator;
-
-  void connect() async {
-    final eth = window.ethereum;
-    var client = Web3Client.custom(eth!.asRpcService());
-    var credentials = await eth.requestAccount();
-    _creator =
-        LongShortPairCreator(address: credentials.address, client: client);
-    checkChain();
-    setState(() {
-      defaultClient = client;
-      defaultCredentials = credentials;
-    });
-  }
+  var activeChainID = 0;
 
   void checkChain() async {
     const mainnetChainID = 137;
     const testnetChainID = 80001;
     var rawactiveChainID = await defaultClient.getChainId();
-    var activeChainID = rawactiveChainID.toInt();
-    EthereumAddress localCollateralToken, localFinancialProductLibrary;
+    EthereumAddress localCollateralToken,
+        localFinancialProductLibrary,
+        localLspAddress;
     switch (activeChainID) {
       case mainnetChainID:
         localCollateralToken = EthereumAddress.fromHex(
             "0x5617604ba0a30e0ff1d2163ab94e50d8b6d0b0df");
         localFinancialProductLibrary = EthereumAddress.fromHex(
             "0xda768D869f1e89ea005cde7e1dBf630ff9307F33");
+        localLspAddress = EthereumAddress.fromHex(
+            "0x4FbA8542080Ffb82a12E3b596125B1B02d213424");
         break;
       case testnetChainID:
         localCollateralToken = EthereumAddress.fromHex(
             "0x76d9a6e4cdefc840a47069b71824ad8ff4819e85");
         localFinancialProductLibrary = EthereumAddress.fromHex(
             "0x9a5de999108042946F59848E083e12690ff018C6");
+        localLspAddress = EthereumAddress.fromHex(
+            "0xed3D3F90b8426E683b8d361ac7dDBbEa1a8A7Da8");
         break;
       default:
         localCollateralToken = EthereumAddress.fromHex(
             "0x76d9a6e4cdefc840a47069b71824ad8ff4819e85");
         localFinancialProductLibrary = EthereumAddress.fromHex(
             "0x9a5de999108042946F59848E083e12690ff018C6");
+        localLspAddress = EthereumAddress.fromHex(
+            "0xed3D3F90b8426E683b8d361ac7dDBbEa1a8A7Da8");
         break;
     }
 
     setState(() {
       collateralToken = localCollateralToken;
       financialProductLibrary = localFinancialProductLibrary;
+      activeChainID = rawactiveChainID.toInt();
+      lspAddress = localLspAddress;
     });
   }
 
-  void mint() async {}
-
   Future<bool> createAnAPT() async {
+    checkChain();
     List<int> theList = utf8.encode("0");
     List<int> priceId = utf8.encode("AAVEUSD");
     priceIdentifier = Uint8List.fromList(priceId);
     customAncillaryData = Uint8List.fromList(theList);
     prepaidProposerReward = BigInt.from(12);
+    _creator = LongShortPairCreator(address: lspAddress, client: defaultClient);
     try {
       _creator.createLongShortPair(
           expirationTimestamp,
@@ -138,6 +135,9 @@ class _MyHomePageState extends State<MyHomePage> {
       return false;
     }
   }
+
+  final connectSnackBar =
+      const SnackBar(content: Text("Connected to this dApp!"));
 
   @override
   Widget build(BuildContext context) {
@@ -174,7 +174,9 @@ class _MyHomePageState extends State<MyHomePage> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter some text';
                       }
-                      syntheticName = value;
+                      setState(() {
+                        syntheticName = value;
+                      });
                       return null;
                     },
                   ),
@@ -184,26 +186,30 @@ class _MyHomePageState extends State<MyHomePage> {
                     initialValue: DateTime.now().toString(),
                     firstDate: DateTime(2000),
                     lastDate: DateTime(2100),
-                    icon: Icon(Icons.event),
+                    icon: const Icon(Icons.event),
                     dateLabelText: 'Date',
                     timeLabelText: "Time",
                     selectableDayPredicate: (date) {
                       // Disable weekend days to select from the calendar
-                      if (date.weekday == 6 || date.weekday == 7) {
-                        return false;
-                      }
-
                       return true;
                     },
-                    onChanged: (val) => print(val),
+                    onChanged: (val) {
+                      var parsedValue = DateTime.parse(val);
+                      setState(() {
+                        expirationTimestamp =
+                            BigInt.from(parsedValue.millisecondsSinceEpoch);
+                      });
+                    },
                     validator: (val) {
                       print(val);
                       return null;
                     },
                     onSaved: (val) {
                       var parsedValue = DateTime.parse(val!);
-                      expirationTimestamp =
-                          BigInt.from(parsedValue.millisecondsSinceEpoch);
+                      setState(() {
+                        expirationTimestamp =
+                            BigInt.from(parsedValue.millisecondsSinceEpoch);
+                      });
                     },
                   ),
                   TextFormField(
@@ -214,7 +220,13 @@ class _MyHomePageState extends State<MyHomePage> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter some text';
                       }
-                      syntheticSymbol = value;
+
+                      if (value.length > 3) {
+                        return "Please keep the symbol size short!";
+                      }
+                      setState(() {
+                        syntheticSymbol = value;
+                      });
                       return null;
                     },
                   ),
@@ -226,7 +238,10 @@ class _MyHomePageState extends State<MyHomePage> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter some text';
                       }
-                      collateralPerPair = BigInt.parse(value);
+
+                      setState(() {
+                        collateralPerPair = BigInt.parse(value);
+                      });
                       return null;
                     },
                   ),
@@ -251,6 +266,12 @@ class _MyHomePageState extends State<MyHomePage> {
           final eth = window.ethereum;
           var client = Web3Client.custom(eth!.asRpcService());
           var credentials = await eth.requestAccount();
+          setState(() {
+            defaultClient = client;
+            defaultCredentials = credentials;
+          });
+          checkChain();
+          ScaffoldMessenger.of(context).showSnackBar(connectSnackBar);
         },
         tooltip: 'Connect',
         child: const Icon(Icons.account_balance_wallet),
